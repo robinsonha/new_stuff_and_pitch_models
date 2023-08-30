@@ -1,0 +1,24 @@
+#Test for correlations between variables
+print(summary(vars))
+corr_vars <- rcorr(as.matrix(vars))
+flattenCorrMatrix <- function(cormat, pmat) {
+  ut <- upper.tri(cormat)
+  data.frame(
+    row = rownames(cormat)[row(cormat)[ut]],
+    column = rownames(cormat)[col(cormat)[ut]],
+    cor  =(cormat)[ut],
+    p = pmat[ut]
+  )
+}
+mat<-flattenCorrMatrix(corr_vars$r, corr_vars$P)
+view(mat)
+
+#Create an alternative data table with one of each pair of highly correlated (>0.95) variables removed
+#Supervise and complete this manually
+vars<-vars %>%
+  select(-c('fb_velo','spin_dif',))
+
+#OR TO AUTOMATE THIS PROCESS:
+#mat<-data.frame(mat)
+#mat<-mat[mat$r>0.95,]
+#vars<-vars[,!names(vars) %in% mat$column]
