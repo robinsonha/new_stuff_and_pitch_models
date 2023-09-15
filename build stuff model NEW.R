@@ -3,6 +3,8 @@ library(tidyverse)
 options(scipen=999)
 library(xgboost)
 library(modelr)
+library(tidymodels)
+library(mlr)
 
 # read in data, bind, remove excess dfs
 s2017 <- read_csv('statcast_2017.csv')
@@ -74,12 +76,21 @@ pitcher_fastballs <- mlbraw1 %>% filter(pitch_type %in% c("FF", "FC", "SI")) %>%
 mlbraw2 <- mlbraw1 %>% left_join(pitcher_fastballs, by = c("year", "pitcher")) %>% mutate(spin_dif = spin_axis - fb_axis, velo_dif = release_speed-fb_velo,
                            ivb_dif = fb_max_ivb-pfx_z, break_dif = (fb_max_x*.5+fb_min_x*.5)-pfx_x)
 
-
+##"set" is a marker used further down to manually control variable subsetting (can be omitted if this is to be automated)
+if(mlbraw2$p_throws[1] == 'L' & mlbraw2$stand[1] == 'R' & mlbraw2$game_type[1] == "R"){
+  mlbraw2$set<-1
+} else if(mlbraw2$p_throws[1] == 'L' & mlbraw2$stand[1] == 'L' & mlbraw2$game_type[1] == "R"){
+  mlbraw2$set<-2
+} else if(mlbraw2$p_throws[1] == 'R' & mlbraw2$stand[1] == 'L' & mlbraw2$game_type[1] == "R"){
+  mlbraw2$set<-3
+} else {
+  mlbraw2$set<-4
+}
+  
 # take 2
 final_vars <- mlbraw2 %>% select(dre_final, starts_with("fb_"), release_speed, release_spin_rate,
                                  release_extension, release_pos_x, release_pos_z, pfx_x, pfx_z,
-                                 pitch_type, spin_axis, spin_dif, velo_dif, ivb_dif, break_dif) 
-
+                                 pitch_type, spin_axis, spin_dif, velo_dif, ivb_dif, break_dif, set) 
 
 
 ## create dummy variables where needed
@@ -97,8 +108,32 @@ gc()
 
 #start modeling
 set.seed(4813)
-library(tidymodels)
-library(mlr)
+
+##Test for correlations between variables
+print(summary(vars))
+corr_vars <- rcorr(as.matrix(vars))
+flattenCorrMatrix <- function(cormat, pmat) {
+  ut <- upper.tri(cormat)
+  data.frame(
+    row = rownames(cormat)[row(cormat)[ut]],
+    column = rownames(cormat)[col(cormat)[ut]],
+    cor  =(cormat)[ut],
+    p = pmat[ut]
+  )
+}
+mat<-flattenCorrMatrix(corr_vars$r, corr_vars$P)
+view(mat)
+
+##Create an alternative data table with one of each pair of highly correlated (>0.95) variables removed
+##Supervise and complete this manually
+vars<-vars %>%
+  select(-c('fb_velo','spin_dif',))
+
+##OR TO AUTOMATE THIS PROCESS:
+#mat<-data.frame(mat)
+#mat<-mat[mat$r>0.95,]
+#vars<-vars[,!names(vars) %in% mat$column]
+
 
 #split into training (80%) and testing set (20%)
 # vars <- vars %>% sample_n(300000)
