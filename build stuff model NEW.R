@@ -1,8 +1,9 @@
-
 library(tidyverse)
 options(scipen=999)
 library(xgboost)
 library(modelr)
+library(tidymodels)
+library(mlr)
 
 # read in data, bind, remove excess dfs
 s2017 <- read_csv('statcast_2017.csv')
@@ -14,15 +15,22 @@ s2023 <- read_csv('statcast_2023.csv')
 
 ### Four total stuff models are built, one for each p_throws / stand combination. For each one, filters must be changed below 
 
-mlbraw <- bind_rows(s2017, s2018, s2019, s2021, s2022, s2023) %>% distinct() %>% filter(p_throws == "L", stand == "L", game_type == "R")
+mlbraw <- bind_rows(s2017, s2018, s2019, s2021, s2022, s2023) %>% 
+  distinct() %>% 
+  filter(p_throws == "L", stand == "L", game_type == "R")
 rm(s2022, s2021, s2019, s2018, s2017, s2023)
 
 
 ### Filter out pitchers hitting besides Ohtani
-pitchers <-  mlbraw %>% group_by(pitcher) %>% summarize(pitches=n()) %>% ungroup() %>% filter(pitches > 74, pitcher != "660271")
+pitchers <-  mlbraw %>% group_by(pitcher) %>% 
+  summarize(pitches=n()) %>% 
+  ungroup() %>% 
+  filter(pitches > 74, 
+         pitcher != "660271")
 
 ## remove NA rows for needed variables, flip values for lefties, create year column
-mlbraw1 <- mlbraw %>% anti_join(pitchers, by = c("batter"="pitcher")) %>%
+mlbraw1 <- mlbraw %>% 
+  anti_join(pitchers, by = c("batter"="pitcher")) %>%
   filter(description != "pitchout", balls < 4, strikes < 3, outs_when_up < 3, !is.na(release_speed), !is.na(release_spin_rate), !is.na(release_extension),
          !is.na(release_pos_x), !is.na(release_pos_z), !is.na(p_throws), !is.na(stand), !is.na(zone), !is.na(plate_x), !is.na(plate_z),
          !pitch_type %in% c("EP", "PO", "KN", "FO", "CS", "SC", "FA"), !is.na(spin_axis), !is.na(pfx_x), !is.na(pfx_z), !is.na(delta_run_exp),
@@ -45,7 +53,10 @@ mlbraw1 <- mlbraw %>% anti_join(pitchers, by = c("batter"="pitcher")) %>%
   )
 
 ## Find average delta run values for each ball or strike
-bs_vals <- mlbraw1 %>% filter(type != "X") %>%  group_by(type) %>% summarize(dre_bs = mean(delta_run_exp, na.rm=T))
+bs_vals <- mlbraw1 %>% 
+  filter(type != "X") %>%  
+  group_by(type) %>% 
+  summarize(dre_bs = mean(delta_run_exp, na.rm=T))
 
 ## now balls in play
 ip_filt <- mlbraw1 %>% filter(type == 'X')
@@ -64,19 +75,19 @@ mlbraw1 <- mlbraw1 %>% left_join(bs_vals, by = "type") %>%
     type != "X" ~ dre_bs,
     TRUE ~ dre_ip))
 
-
-
 ## establish each pitcher's primary fastball by season, then join to df
-pitcher_fastballs <- mlbraw1 %>% filter(pitch_type %in% c("FF", "FC", "SI")) %>% group_by(pitcher, year) %>% 
+pitcher_fastballs <- mlbraw1 %>% filter(pitch_type %in% c("FF", "FC", "SI")) %>% 
+  group_by(pitcher, year) %>% 
   summarize(fb_velo = mean(release_speed), fb_max_ivb = quantile(pfx_z, .8), fb_max_x = quantile(pfx_x, .8), fb_min_x = quantile(pfx_x, .2), 
             fb_max_velo = quantile(release_speed, .8),fb_axis = mean(spin_axis, na.rm=T))
 
-mlbraw2 <- mlbraw1 %>% left_join(pitcher_fastballs, by = c("year", "pitcher")) %>% mutate(spin_dif = spin_axis - fb_axis, velo_dif = release_speed-fb_velo,
-                           ivb_dif = fb_max_ivb-pfx_z, break_dif = (fb_max_x*.5+fb_min_x*.5)-pfx_x)
+mlbraw2 <- mlbraw1 %>% left_join(pitcher_fastballs, by = c("year", "pitcher")) %>% 
+  mutate(spin_dif = spin_axis - fb_axis, velo_dif = release_speed-fb_velo, ivb_dif = fb_max_ivb-pfx_z, break_dif = (fb_max_x*.5+fb_min_x*.5)-pfx_x)
 
 
 # take 2
-final_vars <- mlbraw2 %>% select(dre_final, starts_with("fb_"), release_speed, release_spin_rate,
+final_vars <- mlbraw2 %>% 
+  select(dre_final, starts_with("fb_"), release_speed, release_spin_rate,
                                  release_extension, release_pos_x, release_pos_z, pfx_x, pfx_z,
                                  pitch_type, spin_axis, spin_dif, velo_dif, ivb_dif, break_dif) 
 
@@ -97,8 +108,49 @@ gc()
 
 #start modeling
 set.seed(4813)
-library(tidymodels)
-library(mlr)
+
+#Test for correlations between variables
+
+corr_vars <- rcorr(as.matrix(vars))
+flattenCorrMatrix <- function(cormat, pmat) {
+  ut <- upper.tri(cormat)
+  data.frame(
+    row = rownames(cormat)[row(cormat)[ut]],
+    column = rownames(cormat)[col(cormat)[ut]],
+    cor  =(cormat)[ut],
+    p = pmat[ut]
+  )
+}
+
+mat<-flattenCorrMatrix(corr_vars$r, corr_vars$P)
+mat<-mat[mat$cor>0.95 | mat$cor< -0.95,]
+view(mat)
+
+
+#Test for correlations between variables
+print(summary(vars))
+corr_vars <- rcorr(as.matrix(vars))
+flattenCorrMatrix <- function(cormat, pmat) {
+  ut <- upper.tri(cormat)
+  data.frame(
+    row = rownames(cormat)[row(cormat)[ut]],
+    column = rownames(cormat)[col(cormat)[ut]],
+    cor  =(cormat)[ut],
+    p = pmat[ut]
+  )
+}
+mat<-flattenCorrMatrix(corr_vars$r, corr_vars$P)
+view(mat)
+
+#Create an alternative data table with one of each pair of highly correlated (>0.95) variables removed
+#Supervise and complete this manually
+vars<-vars %>%
+  select(-c('fb_velo','spin_dif',))
+
+#OR TO AUTOMATE THIS PROCESS:
+#mat<-data.frame(mat)
+#mat<-mat[mat$r>0.95,]
+#vars<-vars[,!names(vars) %in% mat$column]
 
 #split into training (80%) and testing set (20%)
 # vars <- vars %>% sample_n(300000)
@@ -153,9 +205,9 @@ lrn_tune <- setHyperPars(lrn,par.vals = mytune$x)
 
 #train model
 xgmodel <- train(learner = lrn_tune,task = traintask)
-imp <- mlr::getFeatureImportance(xgmodel)
+imp_s <- mlr::getFeatureImportance(xgmodel)
 
-view(imp$res)
+view(imp_s$res)
 
 #predict model 
 xgpred <- predict(xgmodel,testtask) %>% as.data.frame()
@@ -167,5 +219,4 @@ caret::RMSE(xgpred$truth, xgpred$response)
 fulltask <- makeRegrTask (data = vars,target = "dre_final")
 
 xgmodel <- train(learner = lrn_tune,task = fulltask)
-
 saveRDS(xgmodel, file = "c_stuff_LHPvsLHBNEW.rds")
