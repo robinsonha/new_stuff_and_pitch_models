@@ -1,0 +1,17 @@
+library(lightgbm)
+set.seed(1234)
+lgbm_model1>-lgb.train(
+  params= list ( #These parameters will be further optimised for final model
+    objective="regression",
+    metric="12", #12 alludes to MSE statistic, see https://lightgbm.readthedocs.io/en/latest/Parameters.html#metric-parameters for metric options.
+    max_depth = 4,
+    num_leaves = 23,
+    num_iterations = 100,
+    early_stopping_rounds = 50,
+    learning_rate = .5
+  ),
+  valids=list(test=test_df,data=train_df) #These will be the same test and training datasets we cleaned and built for the xgboost models
+)
+
+#Get summary RMSE, R squared and MAE to compare back to xgboost models
+postResample(y_test.yhat_predict_final)
