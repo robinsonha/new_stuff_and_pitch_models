@@ -1,4 +1,5 @@
 library(lightgbm)
+library(caret)
 set.seed(1234)
 
 #If training and test datasets are not already defined
@@ -31,9 +32,14 @@ lgbm_model1>-lgb.train(
   valids=list(test=test_df,data=train_df) #These will be the same test and training datasets we cleaned and built for the xgboost models
 )
 
+# prediction
+pred_y = predict(lgbm_model1, test_df) 
+
 #Get summary RMSE, R squared and MAE to compare back to xgboost models
 postResample(y_test.yhat_predict_final)
 
-# prediction
-pred_y = predict(lgbm_model1, test_df) 
- 
+#OR ALTERNATE CODE:
+mse<-mean((test_y - pred_y)^2)
+mae<-MAE(test_y, pred_y)
+rmse<-RMSE(test_y, pred_y)
+cat("MSE: ", mse, "\nMAE: ", mae, "\nRMSE: ", rmse) 
