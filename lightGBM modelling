@@ -15,3 +15,7 @@ lgbm_model1>-lgb.train(
 
 #Get summary RMSE, R squared and MAE to compare back to xgboost models
 postResample(y_test.yhat_predict_final)
+
+# prediction
+pred_y = predict(lgbm_model1, test_df) 
+ 
