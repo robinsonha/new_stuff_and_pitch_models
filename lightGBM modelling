@@ -1,5 +1,23 @@
 library(lightgbm)
 set.seed(1234)
+
+#If training and test datasets are not already defined
+
+indexes = createDataPartition(df$partition_variable, p = .85, list = F) #p is the proportion of training data
+train = df[indexes, ]
+test = df[-indexes, ]
+
+train_x = train[, -"response_variable"]
+train_x = scale(train_x)[,]
+train_y = train[,"response_variable"]
+
+test_x = test[, -"response_variable"]
+test_x = scale(test[,-"response_variable"])[,]
+test_y = test[,"response_variable"]
+
+train_df = lgb.Dataset(train_x, label = train_y)
+test_df = lgb.Dataset.create.valid(dtrain, test_x, label = test_y)
+
 lgbm_model1>-lgb.train(
   params= list ( #These parameters will be further optimised for final model
     objective="regression",
