@@ -1,0 +1,45 @@
+library(lightgbm)
+library(caret)
+set.seed(1234)
+
+#If training and test datasets are not already defined
+
+indexes = createDataPartition(df$partition_variable, p = .85, list = F) #p is the proportion of training data
+train = df[indexes, ]
+test = df[-indexes, ]
+
+train_x = train[, -"response_variable"]
+train_x = scale(train_x)[,]
+train_y = train[,"response_variable"]
+
+test_x = test[, -"response_variable"]
+test_x = scale(test[,-"response_variable"])[,]
+test_y = test[,"response_variable"]
+
+train_df = lgb.Dataset(train_x, label = train_y)
+test_df = lgb.Dataset.create.valid(dtrain, test_x, label = test_y)
+
+lgbm_model1>-lgb.train(
+  params= list ( #These parameters will be further optimised for final model
+    objective="regression",
+    metric="12", #12 alludes to MSE statistic, see https://lightgbm.readthedocs.io/en/latest/Parameters.html#metric-parameters for metric options.
+    max_depth = 4,
+    num_leaves = 23,
+    num_iterations = 100,
+    early_stopping_rounds = 50,
+    learning_rate = .5
+  ),
+  valids=list(test=test_df,data=train_df) #These will be the same test and training datasets we cleaned and built for the xgboost models
+)
+
+# prediction
+pred_y = predict(lgbm_model1, test_df) 
+
+#Get summary RMSE, R squared and MAE to compare back to xgboost models
+postResample(y_test.yhat_predict_final)
+
+#OR ALTERNATE CODE:
+mse<-mean((test_y - pred_y)^2)
+mae<-MAE(test_y, pred_y)
+rmse<-RMSE(test_y, pred_y)
+cat("MSE: ", mse, "\nMAE: ", mae, "\nRMSE: ", rmse) 
