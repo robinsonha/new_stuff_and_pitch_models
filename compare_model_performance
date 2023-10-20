@@ -1,0 +1,21 @@
+compare_models<-function(model_list){
+  library(Metrics)
+
+  for(i in 1:length(model_list)){
+    df<-model_list[i]
+    MAE<-Metrics::mae(df$actual,df$predicted) #MEAN ABSOLUTE ERROR
+    MAPE<--Metrics::mape(df$actual,df$predicted) #MEAN ABSOLUTE PERCENTAGE ERROR
+    RMSE<- Metrics::rmse(df$actual,df$predicted) #ROOT MEAN SQUARE ERROR
+    Model<-paste0(model_list[i])
+    stats_line<-data.frame(cbind(Model,MAE,MAPE,RMSE))
+    names(stats_line)<-c("Model","MAE","MAPE","RMSE")
+
+    if(!exists("stats_tab")){
+      stats_tab<-stats_line
+    } else {
+      stats_tab<-rbind(stats_tab,stats_line)
+    }
+  }
+  return(stats_tab)
+}
+#See https://journals.plos.org/globalpublichealth/article?id=10.1371/journal.pgph.0000495 for formulas
